@@ -20,8 +20,7 @@ class BookApiController extends ApiController
         protected BookRepo $bookRepo,
         protected BookQueries $queries,
         protected PageQueries $pageQueries,
-    ) {
-    }
+    ) {}
 
     /**
      * Get a listing of books visible to the user.
@@ -34,7 +33,15 @@ class BookApiController extends ApiController
             ->addSelect(['created_by', 'updated_by']);
 
         return $this->apiListingResponse($books, [
-            'id', 'name', 'slug', 'description', 'created_at', 'updated_at', 'created_by', 'updated_by', 'owned_by',
+            'id',
+            'name',
+            'slug',
+            'description',
+            'created_at',
+            'updated_at',
+            'created_by',
+            'updated_by',
+            'owned_by',
         ]);
     }
 
@@ -63,21 +70,8 @@ class BookApiController extends ApiController
      */
     public function read(string $id)
     {
-        $book = $this->queries->findVisibleByIdOrFail(intval($id));
-        $book = $this->forJsonDisplay($book);
-        $book->load(['createdBy', 'updatedBy', 'ownedBy']);
-
-        $contents = (new BookContents($book))->getTree(true, false)->all();
-        $contentsApiData = (new ApiEntityListFormatter($contents))
-            ->withType()
-            ->withField('pages', function (Entity $entity) {
-                if ($entity instanceof Chapter) {
-                    $pages = $this->pageQueries->visibleForChapterList($entity->id)->get()->all();
-                    return (new ApiEntityListFormatter($pages))->format();
-                }
-                return null;
-            })->format();
-        $book->setAttribute('contents', $contentsApiData);
+        $book = $this->queries->findVisibleByIdOrFail(intval($id))
+            ->load(['createdBy', 'updatedBy', 'ownedBy', 'pages']);
 
         return response()->json($book);
     }
