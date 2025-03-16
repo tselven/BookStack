@@ -10,6 +10,7 @@ return [
     'confirm' => 'Confirm',
     'back' => 'Back',
     'save' => 'Save',
+    'read' => 'Read',
     'continue' => 'Continue',
     'select' => 'Select',
     'toggle_all' => 'Toggle All',

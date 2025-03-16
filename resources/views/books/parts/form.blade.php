@@ -1,5 +1,5 @@
 @push('head')
-    <script src="{{ versioned_asset('libs/tinymce/tinymce.min.js') }}" nonce="{{ $cspNonce }}"></script>
+<script src="{{ versioned_asset('libs/tinymce/tinymce.min.js') }}" nonce="{{ $cspNonce }}"></script>
 @endpush
 
 {{ csrf_field() }}
@@ -13,6 +13,16 @@
     @include('form.description-html-input')
 </div>
 
+<div class="form-group collapsible" component="collapsible" id="pdf-book">
+    <button refs="collapsible@trigger" type="button" class="collapse-title text-link" aria-expanded="false">
+        <label>Upload Pdf (optional)</label>
+    </button>
+    <div refs="collapsible@content" class="collapse-content">
+        <label for="book">Upload Book as PDF file</label>
+        <input type="file" name="book" id="book" />
+    </div>
+</div>
+
 <div class="form-group collapsible" component="collapsible" id="logo-control">
     <button refs="collapsible@trigger" type="button" class="collapse-title text-link" aria-expanded="false">
         <label>{{ trans('common.cover_image') }}</label>
@@ -21,10 +31,10 @@
         <p class="small">{{ trans('common.cover_image_description') }}</p>
 
         @include('form.image-picker', [
-            'defaultImage' => url('/book_default_cover.png'),
-            'currentImage' => (isset($model) && $model->cover) ? $model->getBookCover() : url('/book_default_cover.png') ,
-            'name' => 'image',
-            'imageClass' => 'cover'
+        'defaultImage' => url('/book_default_cover.png'),
+        'currentImage' => (isset($model) && $model->cover) ? $model->getBookCover() : url('/book_default_cover.png') ,
+        'name' => 'image',
+        'imageClass' => 'cover'
         ])
     </div>
 </div>
