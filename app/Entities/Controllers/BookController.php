@@ -3,6 +3,10 @@
 namespace BookStack\Entities\Controllers;
 
 use BookStack\Activity\ActivityQueries;
+use BookStack\Entities\Models\Page;
+use BookStack\Uploads\FileStorage;
+use Smalot\PdfParser\Parser;
+use Illuminate\Support\Facades\Log;
 use BookStack\Activity\ActivityType;
 use BookStack\Activity\Models\View;
 use BookStack\Activity\Tools\UserEntityWatchOptions;
@@ -25,13 +29,25 @@ use Throwable;
 
 class BookController extends Controller
 {
+    protected FileStorage $fileStorage;
     public function __construct(
         protected ShelfContext $shelfContext,
         protected BookRepo $bookRepo,
         protected BookQueries $queries,
         protected BookshelfQueries $shelfQueries,
         protected ReferenceFetcher $referenceFetcher,
+        FileStorage $fileStorage
     ) {
+        $this->fileStorage = $fileStorage;
+    }
+
+    public function extractPdfText()
+    {
+        $parser = new Parser();
+        $pdf = $parser->parseFile(storage_path('app/public/sample.pdf')); // Path to your PDF file
+        $text = $pdf->getText(); // Extracted text
+
+        return response()->json(['content' => $text]);
     }
 
     /**
@@ -96,11 +112,15 @@ class BookController extends Controller
     public function store(Request $request, ?string $shelfSlug = null)
     {
         $this->checkPermission('book-create-all');
+
+        Log::info('Store method started.');
+
         $validated = $this->validate($request, [
             'name'                => ['required', 'string', 'max:255'],
             'description_html'    => ['string', 'max:2000'],
             'image'               => array_merge(['nullable'], $this->getImageValidationRules()),
             'tags'                => ['array'],
+            'book'                => ['nullable', 'file', 'mimes:pdf', 'max:51200'],
             'default_template_id' => ['nullable', 'integer'],
         ]);
 
@@ -108,17 +128,51 @@ class BookController extends Controller
         if ($shelfSlug !== null) {
             $bookshelf = $this->shelfQueries->findVisibleBySlugOrFail($shelfSlug);
             $this->checkOwnablePermission('bookshelf-update', $bookshelf);
+            Log::info("Bookshelf with slug {$shelfSlug} found.");
         }
 
+        // Create book entry
         $book = $this->bookRepo->create($validated);
+        Log::info("Book created with ID: {$book->id}");
 
         if ($bookshelf) {
             $bookshelf->appendBook($book);
             Activity::add(ActivityType::BOOKSHELF_UPDATE, $bookshelf);
+            Log::info("Book added to bookshelf: {$bookshelf->id}");
         }
+
+        // If a PDF file is uploaded, parse its text and save pages
+        if ($request->hasFile('book')) {
+            Log::info('PDF file uploaded, starting processing.');
+
+            // Use the configured disk for PDF storage
+            $disk = config('filesystems.default'); // Get default disk from config
+            $pdfPath = $request->file('book')->store('pdfs', $disk); // Store PDF in 'pdfs' folder on the selected disk
+            Log::info("PDF file stored at path: {$pdfPath}");
+
+            $parser = new Parser();
+            $pdf = $parser->parseFile(public_path($pdfPath));
+            $pages = $pdf->getPages(); // Extract each page separately
+            Log::info('PDF parsed, starting page processing.');
+
+            foreach ($pages as $index => $page) {
+                Page::create([
+                    'name'      => "Page " . ($index + 1), // Assign a name to each page
+                    'book_id'   => $book->id, // Link to the book
+                    'html'      => nl2br(e($page->getText())), // Convert text to HTML format
+                    'text'      => $page->getText(),
+                    'draft'     => false,
+                    'template'  => false,
+                ]);
+                Log::info("Page $index processed and saved.");
+            }
+        }
+
+        Log::info('Store method finished. Redirecting to book URL.');
 
         return redirect($book->getUrl());
     }
+
 
     /**
      * Display the specified book.

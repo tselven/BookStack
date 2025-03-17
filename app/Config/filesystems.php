@@ -29,6 +29,14 @@ return [
     // Only local, local_secure & s3 are supported by BookStack
     'disks' => [
 
+        'public' => [
+            'driver' => 'local',
+            'root' => public_path(),
+            'url' => env('APP_URL') . '/pdf',
+            'visibility' => 'public',
+        ],
+
+
         'local' => [
             'driver'     => 'local',
             'root'       => public_path(),

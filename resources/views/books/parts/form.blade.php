@@ -3,6 +3,9 @@
 @endpush
 
 {{ csrf_field() }}
+@error('book')
+    <div style="color:red;background-color:#ff9994;padding:10px;"><strong>{{$message}}</strong></div>
+@enderror
 <div class="form-group title-input">
     <label for="name">{{ trans('common.name') }}</label>
     @include('form.text', ['name' => 'name', 'autofocus' => true])
