@@ -11,6 +11,7 @@ yarn-error.log
 /public/dist
 /public/plugins
 /public/css
+/public/pdfs
 /public/js
 /public/bower
 /public/build/
