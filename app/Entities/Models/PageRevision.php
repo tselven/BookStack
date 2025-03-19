@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PageRevision extends Model implements Loggable
 {
-    protected $fillable = ['name', 'text', 'summary'];
+    protected $guarded = [];
     protected $hidden = ['html', 'markdown', 'text'];
 
     /**

@@ -1,6 +1,6 @@
 @extends('layouts.tri')
 @push('head')
-<script src="{{ asset('dist/modal.js') }}" nonce="{{ $cspNonce }}"></script>
+<script src="{{ asset('modal.js') }}" nonce="{{ $cspNonce }}"></script>
 @endpush
 
 @section('container-attrs')
