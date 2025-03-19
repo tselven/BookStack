@@ -4,15 +4,16 @@ namespace BookStack\Entities\Controllers;
 
 use BookStack\Activity\ActivityQueries;
 use BookStack\Entities\Models\Page;
-use BookStack\Uploads\FileStorage;
-use Smalot\PdfParser\Parser;
 use Illuminate\Support\Facades\Log;
 use BookStack\Activity\ActivityType;
 use BookStack\Activity\Models\View;
+use Illuminate\Support\Str;
 use BookStack\Activity\Tools\UserEntityWatchOptions;
+use BookStack\Entities\Models\PageRevision;
 use BookStack\Entities\Queries\BookQueries;
 use BookStack\Entities\Queries\BookshelfQueries;
 use BookStack\Entities\Repos\BookRepo;
+use BookStack\Entities\Repos\PageRepo;
 use BookStack\Entities\Tools\BookContents;
 use BookStack\Entities\Tools\Cloner;
 use BookStack\Entities\Tools\HierarchyTransformer;
@@ -24,30 +25,21 @@ use BookStack\Http\Controller;
 use BookStack\References\ReferenceFetcher;
 use BookStack\Util\SimpleListOptions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class BookController extends Controller
 {
-    protected FileStorage $fileStorage;
+    protected $pagerepo;
     public function __construct(
         protected ShelfContext $shelfContext,
         protected BookRepo $bookRepo,
+        protected PageRepo $pageRepo,
         protected BookQueries $queries,
         protected BookshelfQueries $shelfQueries,
-        protected ReferenceFetcher $referenceFetcher,
-        FileStorage $fileStorage
+        protected ReferenceFetcher $referenceFetcher
     ) {
-        $this->fileStorage = $fileStorage;
-    }
-
-    public function extractPdfText()
-    {
-        $parser = new Parser();
-        $pdf = $parser->parseFile(storage_path('app/public/sample.pdf')); // Path to your PDF file
-        $text = $pdf->getText(); // Extracted text
-
-        return response()->json(['content' => $text]);
     }
 
     /**
@@ -141,30 +133,67 @@ class BookController extends Controller
             Log::info("Book added to bookshelf: {$bookshelf->id}");
         }
 
-        // If a PDF file is uploaded, parse its text and save pages
+        // If a PDF file is uploaded, send it to external API for conversion
         if ($request->hasFile('book')) {
-            Log::info('PDF file uploaded, starting processing.');
+            Log::info('PDF file uploaded, sending for conversion.');
 
-            // Use the configured disk for PDF storage
-            $disk = config('filesystems.default'); // Get default disk from config
-            $pdfPath = $request->file('book')->store('pdfs', $disk); // Store PDF in 'pdfs' folder on the selected disk
-            Log::info("PDF file stored at path: {$pdfPath}");
+            $pdfFile = $request->file('book');
+            $response = Http::attach('pdf', file_get_contents($pdfFile->path()), $pdfFile->getClientOriginalName())
+                ->post('http://localhost:3000/api/convert-pdf');
 
-            $parser = new Parser();
-            $pdf = $parser->parseFile(public_path($pdfPath));
-            $pages = $pdf->getPages(); // Extract each page separately
-            Log::info('PDF parsed, starting page processing.');
+            if ($response->failed()) {
+                Log::error('Failed to convert PDF.');
+                return response()->json(['error' => 'Failed to process PDF'], 500);
+            }
 
-            foreach ($pages as $index => $page) {
-                Page::create([
-                    'name'      => "Page " . ($index + 1), // Assign a name to each page
-                    'book_id'   => $book->id, // Link to the book
-                    'html'      => nl2br(e($page->getText())), // Convert text to HTML format
-                    'text'      => $page->getText(),
-                    'draft'     => false,
-                    'template'  => false,
-                ]);
-                Log::info("Page $index processed and saved.");
+            $convertedData = $response->json();
+            Log::info('PDF conversion successful, processing pages.');
+
+            // Loop through the chapters and only create pages for each chapter
+            foreach ($convertedData['book']['chapters'] as $chapter) {
+                $pageCount = 0;
+                foreach ($chapter['pages'] as $pageData) {
+                    $slug = Str::slug($pageData['name']); // Generate a slug from the page name
+                    $slugCount = 0;
+                    $pageCount++;
+
+                    // Ensure the slug is unique in the database by appending a number if necessary
+                    while (Page::where('slug', $slug)->exists()) {
+                        $slugCount++;
+                        $slug = Str::slug($pageData['name']) . '-' . $slugCount;
+                    }
+                    $newPage = Page::create([
+                        'name' => $pageData['name'],
+                        'book_id' => $book->id,
+                        'html' => $pageData['html'],
+                        'text' => strip_tags($pageData['html']),
+                        'draft' => false,
+                        'slug' => $slug,
+                        'created_by' => 1,
+                        'owned_by' => 1,
+                        'updated_by' => 1,
+                        'priority' => $pageCount,
+                        'revision_count' => 1,
+                        'markdown' => '#markdown',
+                        'template' => false,
+                        'editor' => 'wysiwyg'
+                    ]);
+                    //dd($newPage->id);
+                    /* PageRevision::create([
+                        'page_id' => $newPage->id,
+                        'name' => $newPage->name,
+                        'html' => $pageData['html'],
+                        'text' => strip_tags($pageData['html']),
+                        'slug' => $slug,
+                        'created_by' => 1,
+                        'slug' => $slug,
+                        'revision_number' => 1,
+                        'book_slug' => $book->slug,
+                    ]); */
+                    $page = $this->pageRepo->publishDraft($newPage, $request->all());
+
+                    Log::info("Page {$pageData['name']} processed and saved.");
+                }
             }
         }
 
@@ -172,6 +201,8 @@ class BookController extends Controller
 
         return redirect($book->getUrl());
     }
+
+
 
 
     /**
@@ -182,7 +213,7 @@ class BookController extends Controller
         $book = $this->queries->findVisibleBySlugOrFail($slug);
         $bookChildren = (new BookContents($book))->getTree(true);
         $bookParentShelves = $book->shelves()->scopes('visible')->get();
-
+        //dd($bookChildren);
         View::incrementFor($book);
         if ($request->has('shelf')) {
             $this->shelfContext->setShelfContext(intval($request->get('shelf')));

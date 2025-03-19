@@ -33,7 +33,19 @@ class Page extends BookChild
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'priority'];
+    protected $fillable = [
+        'book_id',
+        'created_by',
+        'updated_by',
+        'revision_count',
+        'owned_by',
+        'name',
+        'priority',
+        'slug',
+        'html',
+        'editor',
+        'text'
+    ];
 
     public string $textField = 'text';
     public string $htmlField = 'html';

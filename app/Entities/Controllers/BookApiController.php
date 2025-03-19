@@ -56,9 +56,7 @@ class BookApiController extends ApiController
     {
         $this->checkPermission('book-create-all');
         $requestData = $this->validate($request, $this->rules()['create']);
-
         $book = $this->bookRepo->create($requestData);
-
         return response()->json($this->forJsonDisplay($book));
     }
 

@@ -112,6 +112,7 @@ class PageController extends Controller
      *
      * @throws NotFoundException
      * @throws ValidationException
+     * NTM7bcxzY4Xey1OXfhjq6Hu0q7xkG3cL
      */
     public function store(Request $request, string $bookSlug, int $pageId)
     {
